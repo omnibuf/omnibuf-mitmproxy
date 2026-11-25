@@ -87,6 +87,8 @@ OMNIBUF_MEDIA_TYPES: tuple[str, ...] = (
     "application/connect+x-omnibuf",
     "application/grpc+omnibuf",
     "application/grpc+x-omnibuf",
+    "application/grpc-web+omnibuf",
+    "application/grpc-web+x-omnibuf",
 )
 
 ENVELOPE_MEDIA_TYPES: frozenset[str] = frozenset(
@@ -95,6 +97,8 @@ ENVELOPE_MEDIA_TYPES: frozenset[str] = frozenset(
         "application/connect+x-omnibuf",
         "application/grpc+omnibuf",
         "application/grpc+x-omnibuf",
+        "application/grpc-web+omnibuf",
+        "application/grpc-web+x-omnibuf",
     }
 )
 
