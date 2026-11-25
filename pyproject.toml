@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mitmproxy-omnibuf"
+version = "0.1.0"
+description = "mitmproxy ContentView addon for inspecting OmniBuf, Connect, and gRPC traffic"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "OmniBuf Contributors" },
+]
+keywords = ["omnibuf", "mitmproxy", "connect", "grpc", "protobuf", "debugging"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "mitmproxy>=10.0.0",
+]
+
+[project.urls]
+Homepage = "https://omnibuf.com/tooling#inspecting-traffic"
+Repository = "https://github.com/omnibuf/omnibuf-mitmproxy"
+Issues = "https://github.com/omnibuf/omnibuf-mitmproxy/issues"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["omnibuf_mitmproxy.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
