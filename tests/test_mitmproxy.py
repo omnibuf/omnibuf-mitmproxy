@@ -7,8 +7,9 @@ import json
 import struct
 from pathlib import Path
 
-import omnibuf_mitmproxy as om
 import pytest
+
+import omnibuf_mitmproxy as om
 
 CORPUS_PATH = Path(__file__).resolve().parents[2] / "omnibuf-go" / "testdata" / "conformance_corpus.json"
 

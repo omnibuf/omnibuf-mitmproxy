@@ -540,6 +540,31 @@ def _trim_dot(name: str | None) -> str | None:
     return name
 
 
+def _get_json_list(obj: dict[str, Any], camel_key: str, snake_key: str) -> list[Any]:
+    val = obj.get(camel_key)
+    if isinstance(val, list):
+        return val
+    val = obj.get(snake_key)
+    if isinstance(val, list):
+        return val
+    return []
+
+
+def _is_editions_file(fdesc: dict[str, Any]) -> bool:
+    if fdesc.get("syntax") == "editions":
+        return True
+    edition = fdesc.get("edition")
+    if isinstance(edition, str):
+        return edition.startswith("EDITION_20")
+    if isinstance(edition, int) and not isinstance(edition, bool):
+        return edition >= 1000
+    return False
+
+
+def _is_message_field_type(ftype: Any, is_editions: bool) -> bool:
+    return ftype in ("TYPE_MESSAGE", 11) or (is_editions and ftype in ("TYPE_GROUP", 10))
+
+
 def load_schema_json(raw_json: str) -> SchemaOverlay:
     """Loads either a lightweight OmniBuf JSON schema or a Protobuf FileDescriptorSet JSON."""
     doc = json.loads(raw_json)
@@ -570,40 +595,75 @@ def load_schema_json(raw_json: str) -> SchemaOverlay:
         return overlay
 
     if isinstance(doc.get("file"), list):
+        map_entries: dict[str, tuple[str | None, str | None]] = {}
+        fallback_root: str | None = None
+
         def index_enum(prefix: str, edesc: dict[str, Any]) -> None:
             full = f"{prefix}.{edesc['name']}" if prefix else edesc["name"]
             overlay.enums[full] = {
                 int(v["number"]): str(v["name"])
-                for v in edesc.get("value", [])
+                for v in (edesc.get("value") or [])
                 if "number" in v and "name" in v
             }
 
-        def index_message(prefix: str, mdesc: dict[str, Any]) -> None:
+        def index_message(prefix: str, mdesc: dict[str, Any], is_editions: bool) -> None:
+            nonlocal fallback_root
             full = f"{prefix}.{mdesc['name']}" if prefix else mdesc["name"]
+            opts = mdesc.get("options")
+            is_map_entry = isinstance(opts, dict) and bool(
+                opts.get("mapEntry") or opts.get("map_entry")
+            )
+            if is_map_entry:
+                val_msg: str | None = None
+                val_enum: str | None = None
+                for f in mdesc.get("field") or []:
+                    if int(f["number"]) == 2:
+                        ftype = f.get("type")
+                        tname = _trim_dot(f.get("typeName") or f.get("type_name"))
+                        if _is_message_field_type(ftype, is_editions):
+                            val_msg = tname
+                        elif ftype in ("TYPE_ENUM", 14):
+                            val_enum = tname
+                        break
+                map_entries[full] = (val_msg, val_enum)
+                return
+
             ftable: dict[int, FieldSchema] = {}
-            for f in mdesc.get("field", []):
+            for f in mdesc.get("field") or []:
                 fnum = int(f["number"])
                 ftype = f.get("type")
                 tname = _trim_dot(f.get("typeName") or f.get("type_name"))
                 ftable[fnum] = FieldSchema(
                     name=f.get("name"),
-                    message=tname if ftype in ("TYPE_MESSAGE", 11) else None,
+                    message=tname if _is_message_field_type(ftype, is_editions) else None,
                     enum=tname if ftype in ("TYPE_ENUM", 14) else None,
                 )
             overlay.messages[full] = ftable
             if overlay.root is None:
-                overlay.root = full
-            for e in mdesc.get("enumType", []):
+                if not full.startswith("google.protobuf."):
+                    overlay.root = full
+                elif fallback_root is None:
+                    fallback_root = full
+            for e in _get_json_list(mdesc, "enumType", "enum_type"):
                 index_enum(full, e)
-            for nested in mdesc.get("nestedType", []):
-                index_message(full, nested)
+            for nested in _get_json_list(mdesc, "nestedType", "nested_type"):
+                index_message(full, nested, is_editions)
 
         for fdesc in doc["file"]:
-            pkg = fdesc.get("package", "")
-            for e in fdesc.get("enumType", []):
+            pkg = fdesc.get("package") or ""
+            is_editions = _is_editions_file(fdesc)
+            for e in _get_json_list(fdesc, "enumType", "enum_type"):
                 index_enum(pkg, e)
-            for m in fdesc.get("messageType", []):
-                index_message(pkg, m)
+            for m in _get_json_list(fdesc, "messageType", "message_type"):
+                index_message(pkg, m, is_editions)
+
+        if overlay.root is None:
+            overlay.root = fallback_root
+        if map_entries:
+            for ftable in overlay.messages.values():
+                for fschema in ftable.values():
+                    if fschema.message and fschema.message in map_entries:
+                        fschema.message, fschema.enum = map_entries[fschema.message]
         return overlay
 
     raise ValueError("unrecognized schema JSON format (expected 'messages' or 'file')")
